@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Configurazione servizio Windows (Servy) — intervalli in secondi -->
+<service_config>
+  <!-- Percorso mappa Modbus (relativo alla root progetto o assoluto) -->
+  <modbus_map>file configurazione/modbus_server_cella_frigo.xml</modbus_map>
+
+  <!-- Host Modbus: se assente/vuoto si usa l'attributo ip della mappa Modbus -->
+  <modbus_host>192.168.75.220</modbus_host>
+  <modbus_timeout_sec>3</modbus_timeout_sec>
+  <!-- Ordine float: cdab | abcd | badc | dcba -->
+  <float_word_order>cdab</float_word_order>
+
+  <!-- Temperature / analogici (reg): default 300 = 5 minuti -->
+  <poll_interval_sec>300</poll_interval_sec>
+  <!-- Allarmi / coil: lettura più frequente -->
+  <alarm_interval_sec>30</alarm_interval_sec>
+
+  <!-- PostgreSQL -->
+  <database>
+    <host>localhost</host>
+    <port>5432</port>
+    <name>carbon_i40</name>
+    <user>carbon</user>
+    <password>carbon</password>
+    <!-- Se valorizzato, ha priorità su host/port/name/user/password -->
+    <url></url>
+  </database>
+</service_config>

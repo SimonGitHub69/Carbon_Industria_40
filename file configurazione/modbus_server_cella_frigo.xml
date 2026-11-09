@@ -1,0 +1,12 @@
+<mbs_configuration writeenable="0" autostart="0" connection="TCP/IP" ip="192.168.75.220" port="502" gatewaymode="0" lenientmode="0" allowlan="0">
+<device addr="1" name="Modbus Cella frigo">
+<reg type="holding+input register" mapping="2 regs float" addr="2" flags="ro" line="9" dev="10" code="Sd"></reg>
+<coil type="coil+discrete input" mapping="1 coil on/off" addr="4" flags="ro" line="9" dev="10" code="dor"></coil>
+<reg type="holding+input register" mapping="2 regs float" addr="5" flags="ro" line="9" dev="11" code="S_SONDA_2"></reg>
+<reg type="holding+input register" mapping="2 regs float" addr="7" flags="ro" line="9" dev="11" code="S_SONDA_3"></reg>
+<reg type="holding+input register" mapping="2 regs float" addr="9" flags="ro" line="9" dev="11" code="S_SONDA_VIRTUALE"></reg>
+<coil type="coil+discrete input" mapping="1 coil on/off" addr="11" flags="rw" line="9" dev="11" code="S_ALM_ALTA_TEMP"></coil>
+<coil type="coil+discrete input" mapping="1 coil on/off" addr="12" flags="ro" line="9" dev="10" code="HI"></coil>
+<reg type="holding+input register" mapping="2 regs float" addr="13" flags="ro" line="9" dev="10" code="SA"></reg>
+</device>
+</mbs_configuration>

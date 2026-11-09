@@ -1,0 +1,23 @@
+<!-- Esportazione ufficiale gateway + IP host LAN -->
+<mbs_configuration
+  writeenable="0"
+  autostart="0"
+  connection="TCP/IP"
+  ip="192.168.75.220"
+  port="502"
+  gatewaymode="0"
+  lenientmode="0"
+  allowlan="0">
+<device addr="1" name="Modbus Cella frigo">
+<!-- Anticella — iJW — line 9 / dev 10 -->
+<reg type="holding+input register" mapping="2 regs float" addr="2" flags="ro" line="9" dev="10" zone="ANTICELLA_+4" code="Sd" label="Temperatura sbrinamento / Sd"></reg>
+<coil type="coil+discrete input" mapping="1 coil on/off" addr="4" flags="ro" line="9" dev="10" zone="ANTICELLA_+4" code="dor" label="Allarme porta / dor"></coil>
+<coil type="coil+discrete input" mapping="1 coil on/off" addr="12" flags="ro" line="9" dev="10" zone="ANTICELLA_+4" code="HI" label="Allarme alta temperatura / HI"></coil>
+<reg type="holding+input register" mapping="2 regs float" addr="13" flags="ro" line="9" dev="10" zone="ANTICELLA_+4" code="SA" label="Sonda ambiente / SA"></reg>
+<!-- Cella -20 — IR33C — line 9 / dev 11 -->
+<reg type="holding+input register" mapping="2 regs float" addr="5" flags="ro" line="9" dev="11" zone="CELLA_-20" code="S_SONDA_2" label="Probe 2 / S_SONDA_2"></reg>
+<reg type="holding+input register" mapping="2 regs float" addr="7" flags="ro" line="9" dev="11" zone="CELLA_-20" code="S_SONDA_3" label="Probe 3 / S_SONDA_3"></reg>
+<reg type="holding+input register" mapping="2 regs float" addr="9" flags="ro" line="9" dev="11" zone="CELLA_-20" code="S_SONDA_VIRTUALE" label="Virtual probe / S_SONDA_VIRTUALE"></reg>
+<coil type="coil+discrete input" mapping="1 coil on/off" addr="11" flags="rw" line="9" dev="11" zone="CELLA_-20" code="S_ALM_ALTA_TEMP" label="High Temperature Alarm / S_ALM_ALTA_TEMP"></coil>
+</device>
+</mbs_configuration>
