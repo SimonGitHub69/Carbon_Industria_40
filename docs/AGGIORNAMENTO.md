@@ -1,131 +1,127 @@
 # Aggiornamento — Carbon Modbus Cella Frigo
 
-**Data:** 2026-11-09  
-**Versione:** 1.1  
-**Destinazione:** Windows Server (Servy + PostgreSQL)
+**Data:** 2026-11-10  
+**Versione:** **1.4**  
+**Destinazione:** Windows Server (`C:\Gestionale\Progetti\Carbon_Industria_40`)
+
+Zip: `dist\aggiornamento_1.4.zip`
 
 ---
 
-## Cosa cambia in questa versione
+## Cosa include la 1.4
 
 | Area | Dettaglio |
 |------|-----------|
-| Mappa Modbus | File ufficiale `modbus_server_cella_frigo.xml` (`SA` @ addr **13**) |
-| Config servizio | Intervalli in `service_config.xml` (secondi) |
-| Temperature | Registrazione periodica ogni `poll_interval_sec` (default **300** = 5 min) |
-| Allarmi | Lettura ogni `alarm_interval_sec` (default **30**); **scrittura DB solo al cambio di stato** |
-| Database | Tabella `modbus_cella_frigo` (nome da dispositivo) |
-| Float | Ordine word **CDAB** |
-
-### Allarmi — comportamento
-
-- Punti: `dor`, `HI`, `S_ALM_ALTA_TEMP`
-- Non vengono più salvati a ogni lettura
-- Su PostgreSQL solo se cambia `ON/OFF` (o la quality)
-- Al riavvio del servizio riprende l’ultimo stato dal DB
+| Intervallo analog | Default **30** secondi (`poll_interval_sec`) |
+| Hot-reload | Cambio intervalli nel XML **senza** riavviare (al ciclo successivo) |
+| Config | `python -m modbus_poller --show-config` mostra file e valori usati |
+| Diagnostica | `python -m modbus_poller --diagnose` / `diagnose.bat` |
+| Lock istanza | Evita doppio poller se il servizio è stoppato ma python resta vivo |
+| Retry | DB/Modbus assenti → ritenta con log |
+| CPU | Sleep lungo + letture Modbus batch |
+| Allarmi | Lettura ogni 60 s; DB **solo al cambio stato** |
 
 ---
 
-## File da copiare sul server
+## File da copiare (obbligatori)
 
-Sostituire nella cartella installazione (es. `C:\Carbon_Industria_40`):
+Estrarre lo zip **sopra** `C:\Gestionale\Progetti\Carbon_Industria_40` oppure copiare:
 
 ```
-modbus_poller\          ← tutto il package (obbligatorio)
+modbus_poller\          ← tutto (include instance_lock.py, diagnose.py, …)
 file configurazione\
+  service_config.xml    ← ATTENZIONE password: vedi sotto
   modbus_server_cella_frigo.xml
-  service_config.xml    ← solo se non hai custom locali; altrimenti unisci a mano
 requirements.txt
 run_service.bat
-scripts\                ← opzionale ma consigliato
-docs\
-  AGGIORNAMENTO.md
-  INSTALL_WINDOWS_SERVER.md
-README.md
+diagnose.bat
+scripts\
+docs\AGGIORNAMENTO.md
 ```
 
-**Non sovrascrivere** se sul cliente hai già password/intervalli personalizzati:
+### `service_config.xml` — non perdere la password DB
 
-- `file configurazione\service_config.xml` → confronta e aggiorna solo le sezioni nuove
+Se in produzione la password non è più `carbon`:
 
-**Non copiare:** `.venv`, `__pycache__`, `.git`
+1. **Non** sovrascrivere tutto il file, **oppure**
+2. Dopo la copia, rimetti user/password corretti e lascia:
+
+```xml
+<poll_interval_sec>30</poll_interval_sec>
+<alarm_interval_sec>60</alarm_interval_sec>
+```
 
 ---
 
-## Procedura di aggiornamento sul server
+## Procedura sul server
 
-Aprire PowerShell **come Administrator**:
+### 0) Ferma eventuali processi orfani
 
 ```powershell
-cd C:\Carbon_Industria_40
-
-# 1. Ferma il servizio Servy (CarbonModbusCellaFrigo) da Servy Manager o:
-#    Stop-Service CarbonModbusCellaFrigo   # se registrato come servizio Windows
-
-# 2. Copia i file aggiornati (da USB/rete) sopra quelli esistenti
-
-# 3. Aggiorna dipendenze Python
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-
-# 4. Verifica config
-.\.venv\Scripts\python.exe -c "from modbus_poller.config import load_settings; s=load_settings(); print(s.modbus.table_name, int(s.poll_interval_sec), int(s.alarm_interval_sec))"
-
-# 5. Test breve (Ctrl+C dopo i primi log)
-.\.venv\Scripts\python.exe -m modbus_poller
-
-# 6. Riavvia il servizio Servy
+Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+  Where-Object { $_.CommandLine -match 'modbus_poller' } |
+  ForEach-Object { Stop-Process -Id $_.ProcessId -Force; Write-Host "Killed" $_.ProcessId }
 ```
 
-Oppure usa lo script:
+In Servy: **Stop** su `CarbonModbusCellaFrigo`.
+
+### 1) Copia / estrai aggiornamento 1.4
+
+### 2) Verifica config
+
+```powershell
+cd C:\Gestionale\Progetti\Carbon_Industria_40
+.\.venv\Scripts\python.exe -m modbus_poller --show-config
+```
+
+Atteso:
+```
+poll_interval  = 30 sec
+alarm_interval = 60 sec
+service_config = C:\Gestionale\Progetti\Carbon_Industria_40\file configurazione\service_config.xml
+```
+
+### 3) Diagnostica
+
+```powershell
+.\.venv\Scripts\python.exe -m modbus_poller --diagnose
+```
+
+Deve dare Modbus 8/8 e PostgreSQL OK.
+
+### 4) (Opzionale) update pip + servizio
 
 ```powershell
 .\scripts\update_client.ps1
 ```
 
----
+Oppure riavvia solo da **Servy Manager**.
 
-## Verifica post-aggiornamento
+### 5) Controlla log Servy
 
-```sql
--- Ultimi valori
-SELECT * FROM modbus_cella_frigo_latest;
-
--- Solo cambi allarme (dovrebbero essere pochi)
-SELECT point_code, value_bool, quality, polled_at
-FROM modbus_cella_frigo
-WHERE point_kind = 'alarm'
-ORDER BY polled_at DESC
-LIMIT 20;
-
--- Temperature (ogni ~5 min)
-SELECT point_code, value_float, polled_at
-FROM modbus_cella_frigo
-WHERE point_kind = 'analog'
-ORDER BY polled_at DESC
-LIMIT 20;
+All’avvio deve comparire:
 ```
-
-In log servizio cerca:
-
-- `solo cambio stato`
-- `Allarme CAMBIO …` solo quando lo stato cambia
-- `Ciclo analog: … ok`
+analog ogni 30s | allarmi ogni 60s
+Config file: C:\Gestionale\...\service_config.xml
+Instance lock: ...\file configurazione\.runtime\modbus_poller.pid
+```
 
 ---
 
-## Config di riferimento (`service_config.xml`)
+## Se “legge ancora” con servizio stoppato
 
-```xml
-<poll_interval_sec>300</poll_interval_sec>
-<alarm_interval_sec>30</alarm_interval_sec>
-<float_word_order>cdab</float_word_order>
-<modbus_host>192.168.75.220</modbus_host>
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+  Where-Object { $_.CommandLine -match 'modbus_poller' } |
+  Select-Object ProcessId, CommandLine
 ```
+
+Termina i PID trovati (passo 0). Con la 1.4 una seconda istanza non parte (lock).
 
 ---
 
 ## Rollback
 
-1. Ferma servizio  
-2. Ripristina la cartella `modbus_poller` e gli XML dalla copia precedente  
-3. Riavvia servizio  
+1. Stop servizio + kill python orfani  
+2. Ripristina `modbus_poller\` e XML dalla copia precedente  
+3. Start servizio  

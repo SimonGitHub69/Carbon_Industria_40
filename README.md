@@ -13,7 +13,7 @@ In `service_config.xml`:
 | Tag | Default | Significato |
 |-----|---------|-------------|
 | `poll_interval_sec` | `300` | Temperature / analogici (5 minuti) — sempre registrati |
-| `alarm_interval_sec` | `30` | Frequenza **lettura** allarmi; su DB solo al **cambio di stato** |
+| `alarm_interval_sec` | `60` | Frequenza **lettura** allarmi; su DB solo al **cambio di stato** |
 
 ## Mappa Modbus (file ufficiale)
 

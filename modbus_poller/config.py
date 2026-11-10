@@ -151,27 +151,58 @@ def _database_url_from_xml(db: ET.Element | None) -> str:
     return f"postgresql://{user}:{password}@{host}:{port}/{name}"
 
 
+def resolve_service_config_path(service_config_path: Path | None = None) -> Path:
+    """Trova service_config.xml (env SERVICE_CONFIG, progetto, oppure cwd)."""
+    candidates: list[Path] = []
+    if service_config_path is not None:
+        candidates.append(Path(service_config_path))
+    env = os.getenv("SERVICE_CONFIG", "").strip()
+    if env:
+        candidates.append(Path(env))
+    candidates.append(DEFAULT_SERVICE_CONFIG)
+    candidates.append(Path.cwd() / "file configurazione" / "service_config.xml")
+
+    tried: list[str] = []
+    for raw in candidates:
+        path = raw if raw.is_absolute() else _project_path(str(raw))
+        # anche path relativo a cwd
+        if not path.exists() and not raw.is_absolute():
+            alt = Path.cwd() / raw
+            if alt.exists():
+                path = alt.resolve()
+        tried.append(str(path))
+        if path.exists():
+            return path.resolve()
+    raise FileNotFoundError(
+        "Config servizio non trovata. Percorsi provati:\n- " + "\n- ".join(tried)
+    )
+
+
+def load_intervals(cfg_path: Path) -> tuple[float, float]:
+    """Rilegge solo gli intervalli (per hot-reload senza restart)."""
+    root = ET.parse(cfg_path).getroot()
+    poll = float(_text(root.find("poll_interval_sec"), "300"))
+    alarm = float(_text(root.find("alarm_interval_sec"), "60"))
+    if poll <= 0 or alarm <= 0:
+        raise ValueError("poll_interval_sec e alarm_interval_sec devono essere > 0")
+    return poll, alarm
+
+
 def load_settings(service_config_path: Path | None = None) -> AppSettings:
     """Carica service_config.xml (+ mappa Modbus). Override path via env SERVICE_CONFIG."""
-    cfg_path = service_config_path or Path(
-        os.getenv("SERVICE_CONFIG", str(DEFAULT_SERVICE_CONFIG))
-    )
-    if not cfg_path.is_absolute():
-        cfg_path = _project_path(str(cfg_path))
-    if not cfg_path.exists():
-        raise FileNotFoundError(f"Config servizio non trovata: {cfg_path}")
+    cfg_path = resolve_service_config_path(service_config_path)
 
     root = ET.parse(cfg_path).getroot()
-    map_path = _project_path(
-        _text(root.find("modbus_map"), "file configurazione/modbus_server_cella_frigo.xml")
-    )
+    map_raw = _text(root.find("modbus_map"), "file configurazione/modbus_server_cella_frigo.xml")
+    map_path = _project_path(map_raw)
+    if not map_path.exists():
+        alt = Path.cwd() / map_raw
+        if alt.exists():
+            map_path = alt.resolve()
     host_override = _text(root.find("modbus_host")) or None
     modbus = load_modbus_xml(map_path, host_override=host_override)
 
-    poll = float(_text(root.find("poll_interval_sec"), "300"))
-    alarm = float(_text(root.find("alarm_interval_sec"), "30"))
-    if poll <= 0 or alarm <= 0:
-        raise ValueError("poll_interval_sec e alarm_interval_sec devono essere > 0")
+    poll, alarm = load_intervals(cfg_path)
 
     return AppSettings(
         poll_interval_sec=poll,
@@ -183,3 +214,4 @@ def load_settings(service_config_path: Path | None = None) -> AppSettings:
         service_config_path=cfg_path,
         modbus=modbus,
     )
+

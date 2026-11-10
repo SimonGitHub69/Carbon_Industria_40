@@ -10,10 +10,10 @@
   <!-- Ordine float: cdab | abcd | badc | dcba -->
   <float_word_order>cdab</float_word_order>
 
-  <!-- Temperature / analogici (reg): default 300 = 5 minuti -->
-  <poll_interval_sec>300</poll_interval_sec>
-  <!-- Allarmi / coil: lettura più frequente -->
-  <alarm_interval_sec>30</alarm_interval_sec>
+  <!-- Temperature / analogici (reg): secondi tra un ciclo e l'altro -->
+  <poll_interval_sec>30</poll_interval_sec>
+  <!-- Allarmi / coil: lettura periodica (DB solo al cambio). 60s riduce carico vs 30s -->
+  <alarm_interval_sec>60</alarm_interval_sec>
 
   <!-- PostgreSQL -->
   <database>

@@ -12,9 +12,18 @@ param(
 $ErrorActionPreference = "Stop"
 Set-Location $InstallRoot
 
-Write-Host "=== Aggiornamento Carbon Modbus ===" -ForegroundColor Cyan
+Write-Host "=== Aggiornamento Carbon Modbus 1.4 ===" -ForegroundColor Cyan
 Write-Host "Root: $InstallRoot"
-Write-Host "Vedi docs\AGGIORNAMENTO.md"
+Write-Host "Vedi docs\AGGIORNAMENTO.md (poll 30s, hot-reload, lock istanza)"
+
+# Termina eventuali poller orfani
+Get-CimInstance Win32_Process -Filter "Name='python.exe'" -ErrorAction SilentlyContinue |
+  Where-Object { $_.CommandLine -match 'modbus_poller' } |
+  ForEach-Object {
+    Write-Host "Stop processo orfano PID $($_.ProcessId)"
+    Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
+  }
+
 
 $venvPython = Join-Path $InstallRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path $venvPython)) {

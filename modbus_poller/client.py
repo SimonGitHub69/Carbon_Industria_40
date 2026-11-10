@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from pymodbus.client import ModbusTcpClient
 
@@ -24,12 +25,14 @@ class ModbusReader:
             port=config.port,
             timeout=timeout,
         )
+        self._reconnect_backoff = 1.0
 
     def connect(self) -> None:
         if not self._client.connect():
             raise ConnectionError(
                 f"Connessione Modbus fallita verso {self._config.host}:{self._config.port}"
             )
+        self._reconnect_backoff = 1.0
         logger.info(
             "Connesso a Modbus %s:%s unit=%s (%s)",
             self._config.host,
@@ -38,10 +41,19 @@ class ModbusReader:
             self._config.device_name,
         )
 
+    def ensure_connected(self) -> None:
+        if self._client.connected:
+            return
+        logger.warning("Modbus disconnesso, riconnessione...")
+        time.sleep(self._reconnect_backoff)
+        self._reconnect_backoff = min(60.0, self._reconnect_backoff * 2)
+        self.connect()
+
     def close(self) -> None:
         self._client.close()
 
     def read_point(self, point: RegisterPoint) -> float | bool:
+        self.ensure_connected()
         unit = self._config.unit_id
         kwargs = self._unit_kwargs(unit)
 
@@ -66,6 +78,86 @@ class ModbusReader:
             return bool(result.bits[0])
 
         raise ValueError(f"Source sconosciuto: {point.source}")
+
+    def read_points_batch(
+        self, points: tuple[RegisterPoint, ...]
+    ) -> dict[str, float | bool | BaseException]:
+        """Una richiesta Modbus per holdings e una per coil (range min..max)."""
+        self.ensure_connected()
+        out: dict[str, float | bool | BaseException] = {}
+        holdings = [p for p in points if p.source == "holding"]
+        coils = [p for p in points if p.source == "coil"]
+
+        if holdings:
+            try:
+                decoded = self._read_holding_range(holdings)
+                out.update(decoded)
+            except Exception as exc:
+                for p in holdings:
+                    out[p.code] = exc
+
+        if coils:
+            try:
+                decoded = self._read_coil_range(coils)
+                out.update(decoded)
+            except Exception as exc:
+                for p in coils:
+                    out[p.code] = exc
+
+        return out
+
+    def _read_holding_range(
+        self, points: list[RegisterPoint]
+    ) -> dict[str, float | bool | BaseException]:
+        kwargs = self._unit_kwargs(self._config.unit_id)
+        addrs = sorted(p.addr for p in points)
+        start = addrs[0]
+        # ogni float occupa 2 registri
+        end = max(p.addr + 1 for p in points)
+        count = end - start + 1
+        result = self._client.read_holding_registers(
+            address=start,
+            count=count,
+            **kwargs,
+        )
+        if result.isError():
+            raise RuntimeError(f"Errore holding range @{start}+{count}: {result}")
+        regs = list(result.registers)
+        out: dict[str, float | bool | BaseException] = {}
+        for p in points:
+            offset = p.addr - start
+            try:
+                out[p.code] = registers_to_float(
+                    regs[offset : offset + 2], self._float_word_order
+                )
+            except Exception as exc:
+                out[p.code] = exc
+        return out
+
+    def _read_coil_range(
+        self, points: list[RegisterPoint]
+    ) -> dict[str, float | bool | BaseException]:
+        kwargs = self._unit_kwargs(self._config.unit_id)
+        addrs = sorted(p.addr for p in points)
+        start = addrs[0]
+        end = addrs[-1]
+        count = end - start + 1
+        result = self._client.read_coils(
+            address=start,
+            count=count,
+            **kwargs,
+        )
+        if result.isError():
+            raise RuntimeError(f"Errore coil range @{start}+{count}: {result}")
+        bits = list(result.bits)
+        out: dict[str, float | bool | BaseException] = {}
+        for p in points:
+            idx = p.addr - start
+            try:
+                out[p.code] = bool(bits[idx])
+            except Exception as exc:
+                out[p.code] = exc
+        return out
 
     @staticmethod
     def _unit_kwargs(unit: int) -> dict:
