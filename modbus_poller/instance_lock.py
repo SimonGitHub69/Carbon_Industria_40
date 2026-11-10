@@ -5,6 +5,7 @@ from __future__ import annotations
 import atexit
 import logging
 import os
+import subprocess
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -22,10 +23,11 @@ def acquire_lock(lock_dir: Path) -> Path:
             old_pid = int(path.read_text(encoding="utf-8").strip())
         except ValueError:
             old_pid = None
-        if old_pid and _pid_alive(old_pid):
+        if old_pid and _is_our_poller(old_pid):
             raise RuntimeError(
                 f"Poller già in esecuzione (PID {old_pid}). "
-                f"Termina quel processo oppure elimina {path} se è un residuo."
+                f"In PowerShell: Stop-Process -Id {old_pid} -Force "
+                f"oppure elimina {path}"
             )
         logger.warning("Rimuovo lock stale: %s", path)
         path.unlink(missing_ok=True)
@@ -56,22 +58,27 @@ def release_lock() -> None:
         _lock_path = None
 
 
-def _pid_alive(pid: int) -> bool:
+def _is_our_poller(pid: int) -> bool:
+    """True solo se il PID è vivo E la command line contiene modbus_poller."""
     if pid <= 0:
         return False
-    try:
-        # Windows: OpenProcess; Unix: os.kill(pid, 0)
-        if os.name == "nt":
-            import ctypes
-
-            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-            handle = ctypes.windll.kernel32.OpenProcess(
-                PROCESS_QUERY_LIMITED_INFORMATION, False, pid
-            )
-            if handle:
-                ctypes.windll.kernel32.CloseHandle(handle)
-                return True
+    if os.name == "nt":
+        try:
+            out = subprocess.check_output(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    f"(Get-CimInstance Win32_Process -Filter \"ProcessId={pid}\").CommandLine",
+                ],
+                text=True,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+            ).strip()
+            return bool(out) and "modbus_poller" in out
+        except Exception:
             return False
+    try:
         os.kill(pid, 0)
         return True
     except OSError:

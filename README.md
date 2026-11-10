@@ -4,7 +4,9 @@ Servizio Python (adatto a **Servy** su Windows) che:
 
 1. Legge la mappa da `file configurazione/modbus_server_cella_frigo.xml`
 2. Legge intervalli e DB da `file configurazione/service_config.xml`
-3. Scrive su PostgreSQL in una tabella dal **nome dispositivo** (`Modbus Cella frigo` → `modbus_cella_frigo`)
+3. Scrive su PostgreSQL:
+   - temperature → `modbus_cella_frigo`
+   - allarmi (solo cambio stato) → `modbus_cella_frigo_alarms`
 
 ## Intervalli (secondi)
 
@@ -54,6 +56,18 @@ python -m modbus_poller
 
 Oppure: `run_service.bat`
 
+## Dashboard temperature (SA / S_SONDA_VIRTUALE)
+
+```powershell
+pip install -r requirements.txt
+python -m dashboard
+```
+
+Apri http://localhost:8080 — server **Waitress** (produzione).  
+Grafico di default; spunta **Mostra tabella valori** per la tabella; export Excel/CSV.  
+Oppure: `run_dashboard.bat`  
+Opzionale Servy: stessi path del poller, Process Parameters `-m dashboard`.
+
 ## Configurazione Servy (servizio Windows)
 
 1. Installa [Servy](https://github.com/aelassas/servy) / Servy Manager
@@ -73,22 +87,38 @@ Oppure: `run_service.bat`
 
 In alternativa punta **Process path** a `run_service.bat` (meno preferibile: dipende da `cmd`).
 
+### Secondo servizio — Dashboard (Waitress)
+
+| Campo | Valore |
+|-------|--------|
+| Name | `CarbonDashboardCellaFrigo` |
+| Process path | `...\Carbon_Industria_40\.venv\Scripts\python.exe` |
+| Startup directory | `...\Carbon_Industria_40` |
+| Process Parameters | `-m dashboard` |
+| Env (opz.) | `SERVICE_CONFIG=...\file configurazione\service_config.xml` |
+
+Startup: Automatic → Install → Start. Vedi anche `docs\SERVY_DASHBOARD.txt`.
+
+Prima di avviare il servizio, chiudi `run_dashboard.bat` e altri processi `-m dashboard`.
+
 Log: in Servy abilita cattura stdout/stderr, oppure controlla Event Viewer.
 
 ## Database
 
-Tabella creata automaticamente: `modbus_cella_frigo`  
-Vista ultimi valori: `modbus_cella_frigo_latest`
+Tabelle create automaticamente:
+- `modbus_cella_frigo` + vista `modbus_cella_frigo_latest` (temperature)
+- `modbus_cella_frigo_alarms` + vista `modbus_cella_frigo_alarms_latest` (eventi)
 
 ```sql
 SELECT * FROM modbus_cella_frigo_latest;
-SELECT * FROM modbus_cella_frigo
- WHERE point_kind = 'analog'
- ORDER BY polled_at DESC LIMIT 50;
-SELECT * FROM modbus_cella_frigo
- WHERE point_kind = 'alarm'
- ORDER BY polled_at DESC LIMIT 50;
+SELECT * FROM modbus_cella_frigo ORDER BY polled_at DESC LIMIT 50;
+
+SELECT * FROM modbus_cella_frigo_alarms_latest;
+SELECT point_code, previous_value, value_bool, changed_at
+  FROM modbus_cella_frigo_alarms
+ ORDER BY changed_at DESC LIMIT 50;
 ```
+
 
 Credenziali in `service_config.xml` → sezione `<database>`.
 

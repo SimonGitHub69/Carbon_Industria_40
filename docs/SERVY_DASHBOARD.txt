@@ -1,0 +1,28 @@
+Servy — Dashboard temperature (avvio al boot)
+
+Prima: chiudi run_dashboard.bat / processi dashboard manuali
+  (una sola istanza sulla porta 8080).
+
+In Servy Manager → New service:
+
+  Name:               CarbonDashboardCellaFrigo
+  Process path:       C:\Gestionale\Progetti\Carbon_Industria_40\.venv\Scripts\python.exe
+  Startup directory:  C:\Gestionale\Progetti\Carbon_Industria_40
+  Process Parameters: -m dashboard
+
+  Environment variables (consigliato):
+    SERVICE_CONFIG=C:\Gestionale\Progetti\Carbon_Industria_40\file configurazione\service_config.xml
+    DASHBOARD_PORT=8080
+
+  Startup type: Automatic
+  → Install → Start
+
+Verifica:
+  http://localhost:8080
+  Badge: dashboard 1.7.8
+  Log Servy: riga "Dashboard 1.7.8 (Waitress)"
+
+Note:
+  - NON usare run_dashboard.bat come Process path (apre pause / resta bloccato).
+  - Se la porta e' occupata, ferma i python con -m dashboard prima di Start.
+  - Il poller resta un servizio SEPARATO (CarbonModbusCellaFrigo, -m modbus_poller).

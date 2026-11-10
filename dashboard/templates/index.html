@@ -1,0 +1,649 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta http-equiv="Cache-Control" content="no-store" />
+  <title>Cella frigo — temperature</title>
+  <script src="/static/chart.umd.min.js?v=176"></script>
+  <script src="/static/chartjs-adapter-date-fns.bundle.min.js?v=176"></script>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a222c;
+      --text: #e8eef4;
+      --muted: #8b9aab;
+      --sa: #3d9cf0;
+      --virt: #2ec4a0;
+      --line: #2a3542;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+    header {
+      padding: 1.25rem 1.5rem 0.5rem;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 1.35rem;
+      font-weight: 600;
+    }
+    header p {
+      margin: 0.35rem 0 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    .ver {
+      color: var(--muted);
+      font-size: 0.75rem;
+      white-space: nowrap;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 0.2rem 0.6rem;
+    }
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.65rem 0.85rem;
+      align-items: end;
+      padding: 1rem 1.5rem;
+    }
+    .field { display: flex; flex-direction: column; gap: 0.25rem; }
+    .toolbar label { color: var(--muted); font-size: 0.8rem; }
+    select, button, input[type="datetime-local"] {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0.45rem 0.75rem;
+      font-size: 0.9rem;
+      color-scheme: dark;
+    }
+    button { cursor: pointer; }
+    button:hover { border-color: var(--sa); }
+    button.primary { background: #1e3a55; border-color: var(--sa); }
+    .sep {
+      width: 1px;
+      align-self: stretch;
+      background: var(--line);
+      margin: 0 0.25rem;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      padding: 0 1.5rem 1rem;
+    }
+    .stat {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 1rem 1.15rem;
+    }
+    .stat .label { color: var(--muted); font-size: 0.8rem; margin-bottom: 0.35rem; }
+    .stat .value { font-size: 1.75rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+    .stat .meta { margin-top: 0.45rem; color: var(--muted); font-size: 0.78rem; }
+    .stat.sa .value { color: var(--sa); }
+    .stat.virt .value { color: var(--virt); }
+    .section-title {
+      margin: 0 1.5rem 0.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+    }
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      padding: 0 1.5rem 0.75rem;
+    }
+    .toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      color: var(--muted);
+      font-size: 0.9rem;
+      user-select: none;
+      cursor: pointer;
+    }
+    .toggle input { accent-color: var(--sa); width: 1rem; height: 1rem; }
+    .chart-wrap {
+      margin: 0 1.5rem 1.25rem;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 1rem;
+      height: min(55vh, 480px);
+    }
+    .table-block.hidden { display: none; }
+    .table-section {
+      margin: 0 1.5rem 1.25rem;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .table-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.65rem 0.85rem;
+      border-bottom: 1px solid var(--line);
+    }
+    .table-toolbar .info { color: var(--muted); font-size: 0.8rem; }
+    .table-scroll {
+      max-height: min(50vh, 480px);
+      overflow: auto;
+    }
+    table.data {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+      font-variant-numeric: tabular-nums;
+    }
+    table.data th, table.data td {
+      padding: 0.45rem 0.75rem;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      white-space: nowrap;
+    }
+    table.data th {
+      position: sticky;
+      top: 0;
+      background: #151c24;
+      color: var(--muted);
+      font-weight: 600;
+      z-index: 1;
+    }
+    table.data td.sa { color: var(--sa); }
+    table.data td.virt { color: var(--virt); }
+    table.data tr:hover td { background: rgba(61, 156, 240, 0.06); }
+    table.data td.num { text-align: right; }
+    .pager {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .pager span { color: var(--muted); font-size: 0.8rem; }
+    .status {
+      padding: 0 1.5rem 1.5rem;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .status.error { color: #f07178; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Modbus Cella frigo</h1>
+      <p>Temperature SA (Anticella) e S_SONDA_VIRTUALE (Cella −20)</p>
+    </div>
+    <span class="ver">dashboard 1.7.8</span>
+  </header>
+
+  <div class="toolbar">
+    <div class="field">
+      <label for="hours">Scorciatoia</label>
+      <select id="hours">
+        <option value="">Personalizzato</option>
+        <option value="1">Ultima 1 ora</option>
+        <option value="6" selected>Ultime 6 ore</option>
+        <option value="12">Ultime 12 ore</option>
+        <option value="24">Ultime 24 ore</option>
+        <option value="48">Ultime 48 ore</option>
+        <option value="168">Ultimi 7 giorni</option>
+        <option value="720">Ultimi 30 giorni</option>
+      </select>
+    </div>
+    <div class="sep" aria-hidden="true"></div>
+    <div class="field">
+      <label for="from">Da</label>
+      <input type="datetime-local" id="from" step="1" />
+    </div>
+    <div class="field">
+      <label for="to">A</label>
+      <input type="datetime-local" id="to" step="1" />
+    </div>
+    <button type="button" class="primary" id="search">Cerca</button>
+    <button type="button" id="all-range">Tutto lo storico</button>
+    <button type="button" id="refresh">Aggiorna</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat sa">
+      <div class="label">SA — Anticella</div>
+      <div class="value" id="latest-sa">—</div>
+      <div class="meta" id="meta-sa"></div>
+    </div>
+    <div class="stat virt">
+      <div class="label">S_SONDA_VIRTUALE — Cella</div>
+      <div class="value" id="latest-virt">—</div>
+      <div class="meta" id="meta-virt"></div>
+    </div>
+  </div>
+
+  <div class="actions">
+    <label class="toggle" for="show-table">
+      <input type="checkbox" id="show-table" />
+      Mostra tabella valori
+    </label>
+    <button type="button" class="primary" id="export-xlsx">Esporta Excel</button>
+    <button type="button" id="export-csv">Esporta CSV</button>
+  </div>
+
+  <h2 class="section-title">Grafico</h2>
+  <div class="chart-wrap" id="chart-wrap">
+    <canvas id="chart"></canvas>
+  </div>
+
+  <div class="table-block hidden" id="table-block">
+    <h2 class="section-title">Tabella valori</h2>
+    <div class="table-section" id="table-section">
+      <div class="table-toolbar">
+        <div class="info" id="table-info">—</div>
+        <div class="pager">
+          <label for="page-size" style="color:var(--muted);font-size:0.8rem">Righe</label>
+          <select id="page-size">
+            <option value="50">50</option>
+            <option value="100" selected>100</option>
+            <option value="250">250</option>
+            <option value="500">500</option>
+            <option value="1000">1000</option>
+          </select>
+          <button type="button" id="page-prev">◀</button>
+          <span id="page-label">1 / 1</span>
+          <button type="button" id="page-next">▶</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Data / ora</th>
+              <th class="num">SA (°C)</th>
+              <th class="num">S_SONDA_VIRTUALE (°C)</th>
+              <th class="num">Δ (°C)</th>
+            </tr>
+          </thead>
+          <tbody id="table-body">
+            <tr><td colspan="5">Attiva “Mostra tabella valori”</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <p class="status" id="status">Caricamento…</p>
+
+  <script>
+    const DASH_VERSION = "1.7.8";
+    const elHours = document.getElementById("hours");
+    const elFrom = document.getElementById("from");
+    const elTo = document.getElementById("to");
+    const elShowTable = document.getElementById("show-table");
+    const tableBlock = document.getElementById("table-block");
+    const tableBody = document.getElementById("table-body");
+    const pageSizeEl = document.getElementById("page-size");
+    const statusEl = document.getElementById("status");
+
+    let autoRefresh = true;
+    let bounds = null;
+    let refreshTimer = null;
+    let tableRows = [];
+    let page = 1;
+    let chart = null;
+    let tableRendered = false;
+
+    function setTableVisible(on) {
+      tableBlock.classList.toggle("hidden", !on);
+      if (on) {
+        renderTablePage();
+        tableRendered = true;
+      }
+    }
+
+    if (typeof Chart !== "undefined") {
+      chart = new Chart(document.getElementById("chart"), {
+        type: "line",
+        data: {
+          datasets: [
+            {
+              label: "SA Anticella (°C)",
+              data: [],
+              borderColor: "#3d9cf0",
+              backgroundColor: "rgba(61,156,240,0.12)",
+              borderWidth: 2,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              tension: 0.15,
+              fill: false,
+            },
+            {
+              label: "S_SONDA_VIRTUALE (°C)",
+              data: [],
+              borderColor: "#2ec4a0",
+              backgroundColor: "rgba(46,196,160,0.12)",
+              borderWidth: 2,
+              pointRadius: 0,
+              pointHoverRadius: 4,
+              tension: 0.15,
+              fill: false,
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: "index", intersect: false },
+          scales: {
+            x: {
+              type: "time",
+              time: {
+                tooltipFormat: "dd/MM/yyyy HH:mm:ss",
+                displayFormats: {
+                  minute: "HH:mm",
+                  hour: "dd/MM HH:mm",
+                  day: "dd/MM",
+                },
+              },
+              title: { display: true, text: "Data / ora", color: "#8b9aab" },
+              ticks: { color: "#8b9aab", maxRotation: 0 },
+              grid: { color: "rgba(42,53,66,0.8)" },
+            },
+            y: {
+              title: { display: true, text: "Temperatura (°C)", color: "#8b9aab" },
+              ticks: { color: "#8b9aab" },
+              grid: { color: "rgba(42,53,66,0.8)" },
+            },
+          },
+          plugins: {
+            legend: { labels: { color: "#e8eef4" } },
+            tooltip: {
+              callbacks: {
+                label: (c) => `${c.dataset.label}: ${c.parsed.y?.toFixed(2)} °C`,
+              },
+            },
+          },
+        },
+      });
+    } else {
+      statusEl.className = "status error";
+      statusEl.textContent = "Avviso: Chart.js non caricato, la tabella resta disponibile.";
+    }
+
+    function pad(n) { return String(n).padStart(2, "0"); }
+
+    function toLocalInputValue(d) {
+      const x = (d instanceof Date) ? d : new Date(d);
+      return (
+        x.getFullYear() + "-" + pad(x.getMonth() + 1) + "-" + pad(x.getDate()) +
+        "T" + pad(x.getHours()) + ":" + pad(x.getMinutes()) + ":" + pad(x.getSeconds())
+      );
+    }
+
+    function fmt(v) {
+      return v == null || Number.isNaN(v) ? "—" : Number(v).toFixed(1) + " °C";
+    }
+
+    function fmtNum(v) {
+      return v == null || Number.isNaN(v) ? "—" : Number(v).toFixed(2);
+    }
+
+    function fmtMeta(st) {
+      if (!st || !st.count) return "nessun campione";
+      return (
+        st.count + " campioni · min " + fmt(st.min) +
+        " · max " + fmt(st.max) +
+        (st.avg != null ? " · media " + fmt(st.avg) : "")
+      );
+    }
+
+    function mergeSeries(sa, virt) {
+      const map = new Map();
+      for (const p of sa || []) {
+        const row = map.get(p.t) || { t: p.t, sa: null, virt: null };
+        row.sa = p.v;
+        map.set(p.t, row);
+      }
+      for (const p of virt || []) {
+        const row = map.get(p.t) || { t: p.t, sa: null, virt: null };
+        row.virt = p.v;
+        map.set(p.t, row);
+      }
+      return Array.from(map.values()).sort((a, b) => (a.t < b.t ? -1 : a.t > b.t ? 1 : 0));
+    }
+
+    function pageCount() {
+      const size = Number(pageSizeEl.value) || 100;
+      return Math.max(1, Math.ceil(tableRows.length / size));
+    }
+
+    function renderTablePage() {
+      if (!elShowTable.checked) return;
+      const size = Number(pageSizeEl.value) || 100;
+      const pages = pageCount();
+      if (page > pages) page = pages;
+      if (page < 1) page = 1;
+      const start = (page - 1) * size;
+      const slice = tableRows.slice(start, start + size);
+      tableBody.innerHTML = slice.map((r, i) => {
+        const delta =
+          r.sa != null && r.virt != null ? Number(r.sa) - Number(r.virt) : null;
+        return (
+          "<tr>" +
+          "<td>" + (start + i + 1) + "</td>" +
+          "<td>" + new Date(r.t).toLocaleString("it-IT") + "</td>" +
+          '<td class="num sa">' + fmtNum(r.sa) + "</td>" +
+          '<td class="num virt">' + fmtNum(r.virt) + "</td>" +
+          '<td class="num">' + fmtNum(delta) + "</td>" +
+          "</tr>"
+        );
+      }).join("") || '<tr><td colspan="5">Nessun dato nel periodo</td></tr>';
+      document.getElementById("page-label").textContent = page + " / " + pages;
+      document.getElementById("table-info").textContent =
+        tableRows.length
+          ? ("Righe: " + tableRows.length)
+          : "Nessuna riga";
+      tableRendered = true;
+    }
+
+    function exportCsv() {
+      const lines = ["n;data_ora;SA_C;S_SONDA_VIRTUALE_C;delta_C"];
+      tableRows.forEach((r, i) => {
+        const delta =
+          r.sa != null && r.virt != null ? (Number(r.sa) - Number(r.virt)).toFixed(2) : "";
+        const ts = new Date(r.t).toLocaleString("it-IT");
+        lines.push(
+          [
+            i + 1,
+            '"' + ts.replace(/"/g, '""') + '"',
+            r.sa == null ? "" : Number(r.sa).toFixed(2),
+            r.virt == null ? "" : Number(r.virt).toFixed(2),
+            delta,
+          ].join(";")
+        );
+      });
+      const blob = new Blob(["\uFEFF" + lines.join("\r\n")], {
+        type: "text/csv;charset=utf-8",
+      });
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+      a.href = URL.createObjectURL(blob);
+      a.download = "temperature_cella_" + stamp + ".csv";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    function applyPresetHours() {
+      const h = elHours.value;
+      if (!h) return;
+      const to = new Date();
+      const from = new Date(to.getTime() - Number(h) * 3600 * 1000);
+      elFrom.value = toLocalInputValue(from);
+      elTo.value = toLocalInputValue(to);
+      autoRefresh = true;
+    }
+
+    function queryParams() {
+      const params = new URLSearchParams();
+      if (elHours.value) {
+        params.set("hours", elHours.value);
+      } else {
+        if (!elFrom.value || !elTo.value) {
+          throw new Error("Imposta data/ora Da e A");
+        }
+        if (elFrom.value > elTo.value) {
+          throw new Error("La data 'A' deve essere successiva a 'Da'");
+        }
+        params.set("from", elFrom.value);
+        params.set("to", elTo.value);
+      }
+      return params;
+    }
+
+    function exportXlsx() {
+      try {
+        if (elHours.value) applyPresetHours();
+        const url = "/api/export.xlsx?" + queryParams().toString();
+        statusEl.className = "status";
+        statusEl.textContent = "Download Excel in corso…";
+        window.location.href = url;
+      } catch (e) {
+        statusEl.className = "status error";
+        statusEl.textContent = "Errore export Excel: " + e.message;
+      }
+    }
+
+    async function loadBounds() {
+      const res = await fetch("/api/bounds");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+      bounds = data;
+      return data;
+    }
+
+    async function load() {
+      statusEl.className = "status";
+      statusEl.textContent = "Aggiornamento…";
+      try {
+        if (elHours.value) applyPresetHours();
+        const res = await fetch("/api/series?" + queryParams().toString());
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
+
+        const saSeries = data.series.SA || [];
+        const virtSeries = data.series.S_SONDA_VIRTUALE || [];
+
+        if (chart) {
+          chart.data.datasets[0].data = saSeries.map((p) => ({ x: p.t, y: p.v }));
+          chart.data.datasets[1].data = virtSeries.map((p) => ({ x: p.t, y: p.v }));
+          chart.update("none");
+        }
+
+        tableRows = mergeSeries(saSeries, virtSeries);
+        page = 1;
+        if (elShowTable.checked) renderTablePage();
+        else tableRendered = false;
+
+        document.getElementById("latest-sa").textContent = fmt(data.latest.SA);
+        document.getElementById("latest-virt").textContent = fmt(data.latest.S_SONDA_VIRTUALE);
+        document.getElementById("meta-sa").textContent = fmtMeta(data.stats && data.stats.SA);
+        document.getElementById("meta-virt").textContent = fmtMeta(data.stats && data.stats.S_SONDA_VIRTUALE);
+
+        const fromIt = new Date(data.from).toLocaleString("it-IT");
+        const toIt = new Date(data.to).toLocaleString("it-IT");
+        let msg =
+          "v" + DASH_VERSION +
+          " · Dal " + fromIt + " al " + toIt +
+          " · righe tabella: " + tableRows.length;
+        if (data.mode === "bucket") msg += " · media ogni " + data.bucket_sec + "s";
+        if (data.truncated) msg += " · risultato troncato";
+        msg += " · " + data.table;
+        statusEl.textContent = msg;
+      } catch (e) {
+        statusEl.className = "status error";
+        statusEl.textContent = "Errore: " + e.message;
+        tableBody.innerHTML = '<tr><td colspan="5">Errore caricamento</td></tr>';
+      }
+    }
+
+    function scheduleRefresh() {
+      if (refreshTimer) clearInterval(refreshTimer);
+      refreshTimer = setInterval(() => {
+        if (autoRefresh && elHours.value) load();
+      }, 30000);
+    }
+
+    elHours.addEventListener("change", () => {
+      if (elHours.value) {
+        applyPresetHours();
+        autoRefresh = true;
+        load();
+      } else {
+        autoRefresh = false;
+      }
+    });
+    elFrom.addEventListener("change", () => { elHours.value = ""; autoRefresh = false; });
+    elTo.addEventListener("change", () => { elHours.value = ""; autoRefresh = false; });
+    document.getElementById("search").addEventListener("click", () => {
+      elHours.value = "";
+      autoRefresh = false;
+      load();
+    });
+    document.getElementById("refresh").addEventListener("click", load);
+    document.getElementById("export-csv").addEventListener("click", exportCsv);
+    document.getElementById("export-xlsx").addEventListener("click", exportXlsx);
+    elShowTable.addEventListener("change", () => {
+      setTableVisible(elShowTable.checked);
+      if (elShowTable.checked && !tableRendered) renderTablePage();
+    });
+    document.getElementById("page-prev").addEventListener("click", () => {
+      page -= 1;
+      renderTablePage();
+    });
+    document.getElementById("page-next").addEventListener("click", () => {
+      page += 1;
+      renderTablePage();
+    });
+    pageSizeEl.addEventListener("change", () => { page = 1; renderTablePage(); });
+    document.getElementById("all-range").addEventListener("click", async () => {
+      try {
+        if (!bounds || !bounds.first_at) await loadBounds();
+        if (!bounds.first_at || !bounds.last_at) {
+          throw new Error("Nessuno storico disponibile in database");
+        }
+        elHours.value = "";
+        elFrom.value = toLocalInputValue(bounds.first_at);
+        elTo.value = toLocalInputValue(bounds.last_at);
+        autoRefresh = false;
+        await load();
+      } catch (e) {
+        statusEl.className = "status error";
+        statusEl.textContent = "Errore: " + e.message;
+      }
+    });
+
+    (async () => {
+      try { await loadBounds(); } catch (_) {}
+      applyPresetHours();
+      await load();
+      scheduleRefresh();
+    })();
+  </script>
+</body>
+</html>

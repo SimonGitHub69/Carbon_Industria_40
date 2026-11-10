@@ -18,10 +18,11 @@ def main() -> int:
         return 1
 
     print("Config OK")
-    print(f"  Modbus: {s.modbus.host}:{s.modbus.port} unit={s.modbus.unit_id}")
-    print(f"  Table : {s.modbus.table_name}")
+    print(f"  Modbus : {s.modbus.host}:{s.modbus.port} unit={s.modbus.unit_id}")
+    print(f"  Analog : {s.modbus.table_name}")
+    print(f"  Allarmi: {s.modbus.table_name}_alarms")
     print(
-        f"  Poll  : analog {int(s.poll_interval_sec)}s / alarm {int(s.alarm_interval_sec)}s"
+        f"  Poll   : analog {int(s.poll_interval_sec)}s / alarm {int(s.alarm_interval_sec)}s"
     )
 
     print("\n1) Test Modbus TCP...")
@@ -53,21 +54,32 @@ def main() -> int:
         with db._conn.cursor() as cur:
             cur.execute("SELECT 1 AS ok")
             print("  Connect OK")
-            cur.execute(f"SELECT COUNT(*) AS n FROM {s.modbus.table_name}")
-            n = cur.fetchone()["n"]
-            print(f"  Tabella {s.modbus.table_name}: {n} righe")
+            cur.execute(f"SELECT COUNT(*) AS n FROM {db.table_name}")
+            print(f"  {db.table_name}: {cur.fetchone()['n']} righe")
             cur.execute(
                 f"""
-                SELECT point_code, value_float, value_bool, quality, polled_at
-                FROM {s.modbus.table_name}
+                SELECT point_code, value_float, quality, polled_at
+                FROM {db.table_name}
                 ORDER BY polled_at DESC LIMIT 5
+                """
+            )
+            for row in cur.fetchall():
+                print("   analog", dict(row))
+
+            cur.execute(f"SELECT COUNT(*) AS n FROM {db.alarms_table_name}")
+            print(f"  {db.alarms_table_name}: {cur.fetchone()['n']} eventi")
+            cur.execute(
+                f"""
+                SELECT point_code, previous_value, value_bool, changed_at
+                FROM {db.alarms_table_name}
+                ORDER BY changed_at DESC LIMIT 5
                 """
             )
             rows = cur.fetchall()
             if not rows:
-                print("  (nessun dato ancora)")
+                print("   (nessun evento allarme ancora)")
             for row in rows:
-                print(" ", dict(row))
+                print("   alarm ", dict(row))
         db.close()
         print("PostgreSQL OK")
     except Exception as exc:

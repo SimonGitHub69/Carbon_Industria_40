@@ -6,7 +6,7 @@
 [CmdletBinding()]
 param(
     [string]$InstallRoot = (Split-Path -Parent $PSScriptRoot),
-    [string]$Version = "1.4"
+    [string]$Version = "1.7"
 )
 
 $ErrorActionPreference = "Stop"
@@ -22,13 +22,18 @@ New-Item -ItemType Directory -Path $stage -Force | Out-Null
 
 $items = @(
     "modbus_poller",
+    "dashboard",
     "file configurazione",
     "scripts",
     "docs",
     "sql",
     "requirements.txt",
     "run_service.bat",
+    "run_dashboard.bat",
+    "verifica_dashboard.bat",
+    "AGGIORNA_DASHBOARD.txt",
     "diagnose.bat",
+
     "README.md",
     "docker-compose.yml",
     ".env.example",

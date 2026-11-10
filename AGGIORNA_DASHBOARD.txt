@@ -1,0 +1,25 @@
+AGGIORNAMENTO DASHBOARD 1.7.8 — Waitress (produzione)
+
+1) Ferma TUTTE le dashboard:
+     Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+       Where-Object { $_.CommandLine -match 'dashboard' } |
+       ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
+
+2) Estrai aggiornamento_1.7.8.zip in:
+     C:\Gestionale\Progetti\Carbon_Industria_40
+   (sovrascrivi; NON in una sottocartella)
+
+3) verifica_dashboard.bat  →  OK versione 1.7.8
+
+4) .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+   run_dashboard.bat
+
+5) Browser Ctrl+F5 → badge "dashboard 1.7.8"
+   Di default: solo grafico. Spunta "Mostra tabella valori" se serve.
+   Export Excel/CSV restano disponibili.
+
+Servy (opzionale, avvio al boot):
+  Path:  ...\.venv\Scripts\python.exe
+  Startup directory: C:\Gestionale\Progetti\Carbon_Industria_40
+  Process Parameters: -m dashboard
+  (come il poller, ma -m dashboard invece di -m modbus_poller)
